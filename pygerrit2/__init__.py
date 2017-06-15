@@ -22,7 +22,8 @@
 
 """Module to interface with Gerrit."""
 
-from .rest import GerritRestAPI, GerritReview
+from .rest import GerritRestAPI
+from .rest.model import GerritReview
 from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 from .rest.auth import HTTPBasicAuthFromNetrc, HTTPDigestAuthFromNetrc
 

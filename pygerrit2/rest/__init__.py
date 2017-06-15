@@ -25,7 +25,10 @@
 import json
 import logging
 import requests
+from requests.auth import HTTPBasicAuth
+from six.moves.urllib.parse import urlencode, quote_plus
 
+from .model import GerritProject, GerritChange
 from .auth import HTTPBasicAuthFromNetrc
 
 GERRIT_MAGIC_JSON_PREFIX = ")]}\'\n"
@@ -274,99 +277,61 @@ class GerritRestAPI(object):
                   headers={"Content-Type": "application/json"})
 
 
-class GerritReview(object):
-    """Encapsulation of a Gerrit review.
-
-    :arg str message: (optional) Cover message.
-    :arg dict labels: (optional) Review labels.
-    :arg dict comments: (optional) Inline comments.
-
+class GerritClient(GerritRestAPI):
+    """ High-level client that has some methods to query for changes in a pythonic way.
     """
 
-    def __init__(self, message=None, labels=None, comments=None):
-        """See class docstring."""
-        self.message = message if message else ""
-        if labels:
-            if not isinstance(labels, dict):
-                raise ValueError("labels must be a dict.")
-            self.labels = labels
-        else:
-            self.labels = {}
-        if comments:
-            if not isinstance(comments, list):
-                raise ValueError("comments must be a list.")
-            self.comments = {}
-            self.add_comments(comments)
-        else:
-            self.comments = {}
+    def __init__(self, url, username, password, auth_class=HTTPBasicAuth):
+        super(GerritClient, self).__init__(url, auth=auth_class(username, password))
 
-    def set_message(self, message):
-        """Set review cover message.
-
-        :arg str message: Cover message.
-
+    def get_project(self, project_name):
+        """ Find a Gerrit project by name
+        :param project_name: The name of the project
+        :return: object you can use to operate on the project
         """
-        self.message = message
+        return GerritProject(self, **self.get('/projects/%s' % quote_plus(project_name)))
 
-    def add_labels(self, labels):
-        """Add labels.
-
-        :arg dict labels: Labels to add, for example
-
-        Usage::
-
-            add_labels({'Verified': 1,
-                        'Code-Review': -1})
-
+    def query_changes(self, **kwargs):
+        """ Get multiple changes given one or multiple query parameters (any parameter supported by Gerrit).
+        :keyword change: The Change-Id of the change.
+        :keyword project: The name of the project.
+        :keyword branch: The name of the target branch. The refs/heads/ prefix is omitted.
+        :keyword message: The subject of the change (header line of the commit message).
+        :keyword status: The status of the change (NEW, MERGED, ABANDONED, DRAFT).
+        :keyword topic: The topic to which this change belongs
+        :return:
         """
-        self.labels.update(labels)
+        options = ['CURRENT_REVISION', 'CURRENT_COMMIT', 'CURRENT_FILES'] if 'options' not in kwargs else kwargs.pop(
+            'options')
 
-    def add_comments(self, comments):
-        """Add inline comments.
+        def _encode_query(query):
+            query_string = urlencode(query, doseq=True) if query else ''
+            return query_string
 
-        :arg dict comments: Comments to add.
+        query = ' '.join('{}:{}'.format(k, v.replace(' ', '+')) for k, v in kwargs.items() if v)
+        return [GerritChange(self, **c) for c in self.get('/changes/?' + _encode_query({
+            'o': options,
+            'q': query
+        }))]
 
-        Usage::
+    def get_change(self, **kwargs):
+        """ Get a single change given one or multiple query parameters. """
+        return next(iter(self.query_changes(**kwargs) or []), None)
 
-            add_comments([{'filename': 'Makefile',
-                           'line': 10,
-                           'message': 'inline message'}])
-
-            add_comments([{'filename': 'Makefile',
-                           'range': {'start_line': 0,
-                                     'start_character': 1,
-                                     'end_line': 0,
-                                     'end_character': 5},
-                           'message': 'inline message'}])
-
+    def create_change(self, project, branch, subject, **optional_args):
         """
-        for comment in comments:
-            if 'filename' and 'message' in list(comment.keys()):
-                msg = {}
-                if 'range' in list(comment.keys()):
-                    msg = {"range": comment['range'],
-                           "message": comment['message']}
-                elif 'line' in list(comment.keys()):
-                    msg = {"line": comment['line'],
-                           "message": comment['message']}
-                else:
-                    continue
-                file_comment = {comment['filename']: [msg]}
-                if self.comments:
-                    if comment['filename'] in list(self.comments.keys()):
-                        self.comments[comment['filename']].append(msg)
-                    else:
-                        self.comments.update(file_comment)
-                else:
-                    self.comments.update(file_comment)
-
-    def __str__(self):
-        """Return a string representation."""
-        review_input = {}
-        if self.message:
-            review_input.update({'message': self.message})
-        if self.labels:
-            review_input.update({'labels': self.labels})
-        if self.comments:
-            review_input.update({'comments': self.comments})
-        return json.dumps(review_input, sort_keys=True)
+        :param project: The name of the project.
+        :param branch: The name of the target branch. The refs/heads/ prefix is omitted.
+        :param subject: The subject of the change (header line of the commit message).
+        :keyword change_id: The Change-Id of the change.
+        :keyword status: The status of the change (NEW, MERGED, ABANDONED, DRAFT).
+        :keyword topic: The topic to which this change belongs
+        :return:
+        """
+        args = {
+            'project': project,
+            'branch': branch,
+            'subject': subject
+        }
+        args.update(optional_args)
+        return GerritChange(self, **self.post('/changes/', json=args))
