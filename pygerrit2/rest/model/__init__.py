@@ -1,5 +1,5 @@
 import fnmatch
-import urllib
+from six.moves.urllib.parse import quote_plus
 
 
 class GerritReview(object):
@@ -109,7 +109,7 @@ class GerritProject(object):
 
     def get_content(self, branch, filepath):
         return self.gerrit.get('/projects/%s/branches/%s/files/%s/content' % (
-            urllib.quote_plus(self.name), urllib.quote_plus(branch), urllib.quote_plus(filepath)))
+            quote_plus(self.name), quote_plus(branch), quote_plus(filepath)))
 
 
 class GerritChange(object):
@@ -159,14 +159,14 @@ class GerritChange(object):
         return self.gerrit.get('/changes/%s/revisions/%s/files/%s/content' % (self.id, self.revision, filename))
 
     def get_files_changed(self, glob_filter='*'):
-        files_changed_names = [urllib.parse.quote_plus(k) for k, v in self.files.items() if fnmatch.fnmatch(k, glob_filter)]
+        files_changed_names = [quote_plus(k) for k, v in self.files.items() if fnmatch.fnmatch(k, glob_filter)]
         return {f: self.get_file_content(f) for f in files_changed_names}
 
     def change_file_content_in_edit(self, filename, stream):
-        return self.gerrit.put('/changes/%s/edit/%s' % (self.id, urllib.quote_plus(filename)), data=stream)
+        return self.gerrit.put('/changes/%s/edit/%s' % (self.id, quote_plus(filename)), data=stream)
 
     def delete_file_in_edit(self, filename):
-        return self.gerrit.delete('/changes/%s/edit/%s' % (self.id, urllib.quote_plus(filename)))
+        return self.gerrit.delete('/changes/%s/edit/%s' % (self.id, quote_plus(filename)))
 
     def publish_edit(self):
         return self.gerrit.post('/changes/%s/edit:publish' % self.id)
