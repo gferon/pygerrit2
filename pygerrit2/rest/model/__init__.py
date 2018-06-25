@@ -155,8 +155,8 @@ class GerritChange(object):
     def submit(self):
         return self.gerrit.post('/changes/%s/submit' % self.id)
 
-    def get_file_content(self, filename):
-        return self.gerrit.get('/changes/%s/revisions/%s/files/%s/content' % (self.id, self.revision, filename))
+    def get_file_content(self, filename, revision='current'):
+        return self.gerrit.get('/changes/%s/revisions/%s/files/%s/content' % (self.id, revision, quote_plus(filename)))
 
     def get_files_changed(self, glob_filter='*'):
         files_changed_names = [quote_plus(k) for k, v in self.files.items() if fnmatch.fnmatch(k, glob_filter)]
