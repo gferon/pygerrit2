@@ -308,7 +308,7 @@ class GerritClient(GerritRestAPI):
             query_string = urlencode(query, doseq=True) if query else ''
             return query_string
 
-        query = ' '.join('{}:{}'.format(k, v.replace(' ', '+')) for k, v in kwargs.items() if v)
+        query = ' '.join('{}:{}'.format(k, v) for k, v in kwargs.items() if v)
         return [GerritChange(self, **c) for c in self.get('/changes/?' + _encode_query({
             'o': options,
             'q': query
