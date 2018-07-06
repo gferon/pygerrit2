@@ -316,7 +316,9 @@ class GerritClient(GerritRestAPI):
 
     def get_change(self, **kwargs):
         """ Get a single change given one or multiple query parameters. """
-        return next(iter(self.query_changes(**kwargs) or []), None)
+        changes = self.query_changes(**kwargs)
+        assert len(changes) <= 1, "Found more than one change with the query parameters: %s" % kwargs
+        return changes[0] if changes else None
 
     def create_change(self, project, branch, subject, **optional_args):
         """
